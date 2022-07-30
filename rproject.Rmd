@@ -1,0 +1,659 @@
+---
+title: 'Project #2 - R Data Analysis'
+output: html_document
+---
+
+
+```{r}
+library(dplyr) 
+library(tidyr) 
+library(ggplot2)
+library(tidyverse)
+
+source('func.R')
+```
+
+
+─ Conflicts ────────────────────────────────────────────────────────────────────────────────────────────────────
+───── tidyverse_conflicts() ──
+✖ dplyr::between()   masks data.table::between()
+✖ dplyr::filter()    masks stats::filter()
+✖ dplyr::first()     masks data.table::first()
+✖ dplyr::lag()       masks stats::lag()
+✖ dplyr::last()      masks data.table::last()
+✖ purrr::transpose() masks data.table::transpose()
+
+
+## Data source
+Data source:
+
+*** I. mobility data
+- mobility: https://www.google.com/covid19/mobility/
+
+
+*** II. county-level COVID data
+- CDC: https://data.cdc.gov/Public-Health-Surveillance/United-States-COVID-19-County-Level-Data-Sources/7pvw-pdbr
+- NYC cases: https://www1.nyc.gov/site/doh/covid/covid-19-data.page
+- NYC vaccine: https://www1.nyc.gov/site/doh/covid/covid-19-data-vaccines.page#doses
+
+
+*** III. county-level census data
+- 2020 CENSUS RESULTS FOR NEW YORK CITY.pdf
+- nyc.gov/planning August 2021
+
+
+## Data pre-processing
+
+### I. Mobility data
+#### 1. Load original data
+```{r}
+### load original data
+us_2020 <- read.csv("./data/Region_Mobility_Report_CSVs/2020_US_Region_Mobility_Report.csv", 
+                    stringsAsFactors = FALSE,na="")
+
+us_2021 <- read.csv("./data/Region_Mobility_Report_CSVs/2021_US_Region_Mobility_Report.csv", 
+                    stringsAsFactors = FALSE,na="")
+
+us_2022 <- read.csv("./data/Region_Mobility_Report_CSVs/2022_US_Region_Mobility_Report.csv", 
+                    stringsAsFactors = FALSE,na="")
+
+```
+
+
+```{r}
+### crosscheck dimensions and column names. Make sure 1) no. of columns and 2) column names are matched
+dim(us_2020)
+dim(us_2021)
+dim(us_2022)
+
+colnames(us_2020) == colnames(us_2021)
+colnames(us_2021) == colnames(us_2022)
+
+```
+
+```{r}
+### check column names
+colnames(us_2020)
+```
+
+
+```{r}
+### preliminary look of the data
+#View(us_2020)
+head(us_2020)
+```
+
+
+```{r}
+### check type and range of each column - 1
+str(us_2020)
+str(us_2021)
+str(us_2022)
+```
+```{r}
+### check type and range of each column - 2
+summary(us_2020)
+#summary(us_2021)
+#summary(us_2022)
+```
+
+
+```{r}
+### understand columns
+#unique(us_2020$sub_region_1) # state
+#unique(us_2020$sub_region_2) # county
+#unique(us_2020$metro_area) # all NA
+```
+
+#### 2. subset dataframe for anallysis use
+```{r}
+### subset NYC data
+
+nyc_county = c("New York County", # Manhattan
+               "Kings County", # Brooklyn
+               "Bronx County", # Bronx
+               "Richmond County", # Staten Island
+               "Queens County") # Queens
+
+nyc_2020 <- us_2020 %>% 
+     filter(  (sub_region_1 == "New York")  & (sub_region_2 %in% nyc_county))
+
+nyc_2021 <- us_2021 %>% 
+     filter(  (sub_region_1 == "New York")  & (sub_region_2 %in% nyc_county))
+
+nyc_2022 <- us_2022 %>% 
+     filter(  (sub_region_1 == "New York")  & (sub_region_2 %in% nyc_county))
+
+dim(nyc_2020) # 1605   15
+dim(nyc_2021) # 1825   15
+dim(nyc_2022) # 980  15
+
+```
+
+```{r}
+### check dim 
+nyc_2020 %>% group_by(sub_region_2) %>% summarise(n())
+nyc_2021 %>% group_by(sub_region_2) %>% summarise(n())
+nyc_2022 %>% group_by(sub_region_2) %>% summarise(n())
+
+### check NAs in date,sub_region_2, 6 categories
+colSums(is.na(nyc_2020)) # 8 - parks_percent_change_from_baseline 
+colSums(is.na(nyc_2021)) # no NA
+colSums(is.na(nyc_2022)) # no NA
+
+nyc_2020 %>%
+  filter(is.na(parks_percent_change_from_baseline))  # Richmond County's park mobility data has 8 NAs (2020-8-18 ~ 2020-9-7)
+```
+
+
+```{r}
+### combine annual mobility data
+mobility_nyc <- rbind(nyc_2020, nyc_2021, nyc_2022)
+
+#str(mobility_nyc$date)
+
+```
+
+```{r}
+### check dim and each column
+dim(mobility_nyc) # 4410   15
+summary(mobility_nyc)
+str(mobility_nyc)
+```
+
+
+```{r}
+### check numbers of data
+mobility_nyc %>% group_by(sub_region_2) %>% summarise(n())
+```
+
+NYC County (Borough)
+
+New York County (Manhattan)
+Kings County (Brooklyn)
+Bronx County (The Bronx)
+Richmond County (Staten Island)
+Queens County (Queens)
+
+
+```{r}
+county_nyc = c("New York County",
+           "Kings County",
+           "Bronx County",
+           "Richmond County", 
+           "Queens County")
+
+boro_nyc = c("Manhattan",
+             "Brooklyn",
+             "Bronx",
+             "Staten Island",
+             "Queens")
+```
+
+
+Change date type and subset
+```{r}
+### change data type & subset by date ()
+mobility_nyc <- mobility_nyc %>%
+  mutate(date = as.Date(date)) %>%
+  filter(date < "2022-7-1")
+```
+
+
+#### 3. pre-processing
+Add feature - weekday
+```{r}
+### add feature: weekday
+#install.packages("lubridate")
+library(lubridate)
+mobility_nyc$weekday <- wday(mobility_nyc$date,week_start=1) #,label=TRUE)
+
+#mobility_nyc$week <- wday(mobility_nyc$date,week_start=1,label=TRUE)
+#mobility_nyc$week <- wday(mobility_nyc$date,label=TRUE)
+
+```
+
+
+Change column names
+```{r}
+mobility_nyc = mobility_nyc %>% 
+  rename(state = sub_region_1,
+         borough = sub_region_2,
+         retail_and_recreation = retail_and_recreation_percent_change_from_baseline,
+         grocery_and_pharmacy = grocery_and_pharmacy_percent_change_from_baseline,
+         parks = parks_percent_change_from_baseline,
+         transit_stations = transit_stations_percent_change_from_baseline,
+         workplaces = workplaces_percent_change_from_baseline,
+         residential = residential_percent_change_from_baseline)
+
+
+```
+
+Replace county name by borough names
+```{r}
+mobility_nyc <- mobility_nyc %>%
+  mutate( borough = case_when( 
+    borough == "Bronx County" ~ "Bronx",
+    borough == "Kings County" ~ "Brooklyn",
+    borough == "New York County" ~ "Manhattan",
+    borough == "Queens County" ~ "Queens",
+    borough == "Richmond County" ~ "Staten Island"))
+
+```
+
+
+Sava a copy
+```{r}
+### save a copy of pre-processed mobility data
+#write.csv(mobility_nyc, "./data/mobility_nyc.csv",row.names=FALSE)
+
+#df_mobility_nyc <- mobility_nyc
+#mobility_nyc <- df_mobility_nyc
+#dim(df_mobility_nyc) # 4335 15
+
+```
+
+
+
+### II. COVID data
+#### 1. Load original data
+```{r}
+### load original data
+cases_nyc <- read.csv("./data/covid/nyc_data_by_day.csv", 
+                     stringsAsFactors = FALSE, na="")
+
+vx_nyc <- read.csv("./data/covid/nyc_trends_byboro.csv", 
+                     stringsAsFactors = FALSE, na="")
+
+census_nyc <- read.csv("./data/nyc_2020_census.csv", 
+                     stringsAsFactors = FALSE, na="")
+```
+
+#### Case/hosp/death data
+```{r}
+### check dimension
+dim(cases_nyc) # 868  67
+dim(vx_nyc) # 582  37
+dim(census_nyc) # 5 3
+```
+```{r}
+### check type and range of each column
+str(cases_nyc)
+summary(cases_nyc)
+
+str(vx_nyc) # [To-do] some mobility data are chr type, including "<10"
+summary(vx_nyc)
+
+str(census_nyc)
+summary(census_nyc)
+```
+
+
+```{r}
+### check NAs
+colSums(is.na(cases_nyc)) # no NAs
+colSums(is.na(vx_nyc)) # no NAs
+colSums(is.na(census_nyc)) # no NAs
+```
+
+#### 2. subset (by column)
+```{r}
+### subset for analysis (by columns)
+
+#colnames(cases_nyc)
+
+case_col = colnames(cases_nyc)[c(1,
+         12,14,15,
+         23,25,26,
+         34,36,37,
+         45,47,48,
+         56,58,59)]
+
+cases_nyc_v1 <- cases_nyc %>% 
+  select(all_of(case_col))
+
+colnames(cases_nyc_v1)
+```
+#### 3. data processing
+```{r}
+### data processing
+#### 1. change data type - date
+#### 2. modify column names
+#### 3. remove NAs - no NAs
+#### 4. subset by date for analysis period (2020.2.15-2022.6.30)
+
+cases_nyc_v2 <- cases_nyc_v1 %>%
+  mutate(date_of_interest = as.Date(date_of_interest, format="%m/%d/%Y")) %>%
+  rename(date = date_of_interest) %>%
+  pivot_longer(cols = -date) %>%
+  separate(col = name, into = c("borough","ctype") , sep =2 ) %>% 
+  pivot_wider(id_cols = c(date,borough), names_from = ctype, values_from = value) %>%
+  mutate( borough = case_when( borough == 'BK' ~ 'Brooklyn',
+                              borough == 'BX' ~ 'Bronx',
+                              borough == 'MN' ~ 'Manhattan',
+                              borough == 'QN'~ 'Queens',
+                              borough == 'SI' ~ 'Staten Island')) %>%
+  rename(case_count = '_CASE_COUNT' ,
+         hosp_count = '_HOSPITALIZED_COUNT' ,
+         death_count = '_DEATH_COUNT') %>%
+  rename_with(tolower)%>%
+  filter(date <"2022-7-1")
+
+
+#View(cases_nyc_v2)
+str(cases_nyc_v2)
+summary(cases_nyc_v2)
+cases_nyc_v2 %>% group_by(borough)  %>% summarise(n())
+```
+
+
+
+#### vaccine
+```{r}
+### check dimension
+dim(vx_nyc) # 582  37
+```
+
+```{r}
+### check type and range of each column
+str(vx_nyc) # [To-do] some mobility data are chr type, including "<10"
+summary(vx_nyc)
+```
+
+
+```{r}
+### check NAs
+colSums(is.na(vx_nyc)) # no NAs
+```
+
+
+#### 2. subset by column
+#### 3. data processing
+```{r}
+colnames(vx_nyc)
+str(colnames(vx_nyc))
+
+### subset (by columns), change data type, remove NAs
+vx_nyc_v1 <- vx_nyc %>% 
+  select(-2,-3,-4,-5,-6,-7) %>%
+  mutate(DATE = as.Date(DATE)) %>%
+  mutate_if(is.character,   funs(ifelse(.=="<10", "0", .))) %>%
+  mutate_if(is.character,  as.integer)
+
+colnames(vx_nyc_v1)
+dim(vx_nyc_v1)
+str(vx_nyc_v1)
+```
+
+
+```{r}
+### data preperation:
+#### 1. change data type (previous)
+#### 2. modify column names
+#### 3. remove NAs (previous)
+#### 4. subset by date for analysis period (2020.2.15-2022.6.30)
+
+
+vx_nyc_v2 <- vx_nyc_v1 %>%
+  pivot_longer(cols = -DATE) %>%
+  separate(col = name, into = c("borough","vtype") , sep =2 ) %>% 
+  pivot_wider(id_cols = c(DATE,borough), names_from = vtype, values_from = value) %>%
+  mutate( borough = case_when( borough == 'BK' ~ 'Brooklyn',
+                              borough == 'BX' ~ 'Bronx',
+                              borough == 'MH' ~ 'Manhattan',
+                              borough == 'QS'~ 'Queens',
+                              borough == 'SI' ~ 'Staten Island')) %>%
+  rename(vx_fully = '_COUNT_FULLY_CUMULATIVE' ,
+          vx_plus1 = '_COUNT_1PLUS_CUMULATIVE' ,
+          vx_additional = '_COUNT_ADDITIONAL_CUMULATIVE',
+          vx_fully_perc = '_PERC_FULLY' ,
+          vx_plus1_perc = '_PERC_1PLUS' ,
+          vx_additional_perc = '_PERC_ADDITIONAL' ) %>%
+  rename_with(tolower) %>%
+  filter(date <"2022-7-1")
+
+str(vx_nyc_v2)
+summary(vx_nyc_v2)
+vx_nyc_v2 %>% group_by(borough)  %>% summarise(n()) #564
+```
+
+#### 4. case & vx data combined
+```{r}
+dim(cases_nyc_v2) #4265    5
+dim(vx_nyc_v2) #2820    8
+
+covid_nyc_1 = left_join(cases_nyc_v2, vx_nyc_v2, by = c("date","borough"))
+covid_nyc = left_join(covid_nyc_1, census_nyc, by = "borough")
+
+#View(covid_nyc)
+summary(covid_nyc)
+dim(covid_nyc) #4265 13
+
+```
+
+#### 5. Generate features
+```{r}
+#### generate features
+#colnames(covid_nyc)
+
+# 1 - percent count
+covid_nyc <- covid_nyc %>%
+  mutate(case_count_perc = (case_count/population)*100,
+         hosp_count_perc = (hosp_count/population)*100,
+         death_count_perc = (death_count/population)*100)
+
+colnames(covid_nyc)
+```
+
+Sava a copy of pre-processed COVID data
+```{r}
+#write.csv(cases_nyc_v2, "./data/covid_nyc.csv",row.names=FALSE)
+#df_cases_nyc <- cases_nyc_v2
+#cases_nyc_v2 <- df_cases_nyc
+
+#write.csv(vx_nyc_v2, "./data/covid_nyc.csv",row.names=FALSE)
+#df_vx_nyc <- vx_nyc_v2
+#vx_nyc_v2 <- df_vx_nyc
+
+#write.csv(covid_nyc, "./data/covid_nyc.csv",row.names=FALSE)
+#df_covid_nyc <- covid_nyc
+#covid_nyc <- df_covid_nyc
+```
+
+
+## Data analysis:
+
+### Part I - By category
+
+#### 1. overall
+```{r, fig.width = 20, fig.height = 5, warning=FALSE}
+categories_ = colnames(mobility_nyc)[10:15]
+
+
+mobility_nyc %>% 
+  #group_by(borough) %>%
+  #summarise(median = median(retail_and_recreation,na.rm=TRUE),
+  #          mean = mean(retail_and_recreation,na.rm=TRUE))%>%
+  select(borough,all_of(categories_))%>%
+  pivot_longer(cols = -borough)%>%
+  ggplot(aes(x=name, y=value, fill=borough),na.rm=TRUE) +
+  geom_violin(position='dodge') + 
+  labs(title = "Distribution of Mobility Change from Baseline (%) by Category", x="Date",y="Percentage Change (%)")+
+  guides(fill=guide_legend("Borough"))
+
+```
+
+
+
+```{r, fig.width = 10, fig.height = 5}
+library(ggpubr)
+source('func.R')
+
+library(patchwork)
+
+```
+
+
+"Retail and Recreation"
+"Grocery and Pharmacy"
+"Parks"
+"Transit Stations"
+"Workplaces"
+"Residential"
+
+*1
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Retail and Recreation")
+```
+
+* 2
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Grocery and Pharmacy")
+```
+
+* 3
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Parks")
+```
+
+* 4
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Transit Stations")
+```
+
+* 5
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Workplaces")
+```
+
+
+* 6
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Residential")
+```
+
+#### NOT IN USE - sidenote
+```{r}
+mobility_nyc %>%
+  filter(borough=="Manhattan")  %>%    
+  ggplot() +
+    geom_point(aes(x=date,y=workplaces), size=1, alpha=0.4) +
+    labs(title = "Workplace Change from Baseline(%)", x="Date",y="Percentage Change (%)") +
+    #ylim(-100,100) +
+    geom_hline(yintercept=0, linetype="dashed", color = "red") #+#, size=1) +
+    #geom_smooth(method = lm)
+```
+
+
+
+```{r}
+mobility_nyc %>%
+  filter(borough=="Manhattan")  %>%    
+  ggplot() +
+    geom_point(aes(x=date,y=parks), size=1, alpha=0.4) +
+    labs(title = "Parks Change from Baseline(%)", x="Date",y="Percentage Change (%)") +
+    #ylim(-100,100) +
+    geom_hline(yintercept=0, linetype="dashed", color = "red") #+#, size=1) +
+    #geom_smooth(method = lm)
+```
+
+1. Manhattan is the most impacted borough across all categories.
+2. Retail & Recreation - shows clear recovery since 2021 but still under pre-covid level. Manhattan is heavily impacted and the other 4 boroughs are similier.
+3. Grocery and Pharmacy - leaset impacted category but still slightly under water
+4. Parks - Seasonality with peaks in summer and early fall time. Brookly and Queens have very high variations by seasonality, but mobility are still relatively lower than the baseline period in each year.
+5. Transit Stations - Still suffering large decreases from baseine across boroughs
+6. Workplaces - largest impacted category
+7. Residential - increase since COVID. Largest increase was in H1 2020, and show decreasing trends
+
+
+### Part II - Mobility Relationship with Covid (Manhattan)
+
+
+#### 2.1 Mobility vs COVID stats
+```{r}
+dim(mobility_nyc) 
+dim(covid_nyc)
+nyc <- left_join(mobility_nyc,covid_nyc,by=c("date","borough"))
+
+dim(nyc)
+```
+
+###### single category of a borough - side analysis
+```{r, warning=FALSE}
+
+nyc_1 = nyc %>%
+  filter(borough =="Manhattan") %>%
+  select(date,case_count,parks) %>%
+  pivot_longer(col=-date) %>%
+  mutate(
+    case_count = ifelse(name=="case_count", value, NA),
+    parks =  ifelse(name=="parks", value, NA))
+
+nyc_1$name <- factor(nyc_1$name, levels = c("case_count", "parks"),
+                     labels = c("Case Count", "Parks change(%)"))
+
+# df$supp <- factor(df$supp, levels = c("OJ", "VC"),
+#                   labels = c("Orange Juice", "Vitamin C")
+#                   )
+
+ggplot(nyc_1) + 
+  geom_line(aes(x=date, y=case_count),color="red") +
+#  ggplot_add(geom_area(data= nyc,aes(x=date, y=vx_fully),fill="red"))+
+  geom_line(aes(x=date,y=parks),color="blue") +
+  facet_grid(name ~ ., scales="free_y") +
+  labs(title = "Manhattan", x="Date",)+
+  ylab("")
+
+```
+
+###### all category of a borough
+```{r, fig.width = 10, fig.height = 20}
+categories_
+
+label1 = c()
+for (a in categories_[1:6]) {
+  label1 = append(label1,
+               gsub("And", "&", paste(paste(str_to_title(strsplit(a, "_")[[1]]),collapse = " "),"Change (%)",sep=" ")))
+
+}
+label1
+
+```
+
+
+```{r, fig.width = 10, fig.height = 15}
+source('func.R')
+
+categories_colname = colnames(mobility_nyc)[10:15]
+
+boro_plot("Manhattan","Cases")
+boro_plot("Manhattan",covid_stat = "Vaccinations")
+boro_plot("Queens",covid_stat = "Deaths")
+
+```
+
+
+
+#### 2.2 Correlation
+```{r}
+library(corrplot)
+cutoff_date = "2021-11-30"
+#df_nyc = left_join(mobility_nyc, covid_nyc, by = c("date","borough"))
+
+dim(mobility_nyc) #[1] 4335   15
+dim(covid_nyc) #[1] 4265   11
+#dim(df_nyc) #[1] 4335   24
+
+```
+
+
+```{r, fig.width = 10, fig.height = 8}
+source('func.R')
+
+corr_matrix_plot(region="NYC", "2021-11-30")
+corr_matrix_plot(region="Manhattan", "2021-11-30")
+#corr_matrix_plot(region="Brooklyn", "2021-11-30")
+
+```
+1. Residential mobility change is positively correlated with COVID stats, and all other categories are negatively correlated with them.
+2. Correlations between mobility change and COVID stats gradually decreases.
