@@ -30,15 +30,32 @@ nyc <- left_join(mobility_nyc,covid_nyc,by=c("date","borough"))
 ### ui.R Choices ###
 ### (function para)#
 ####################
-categories_colname = colnames(mobility_nyc)[10:15]
+categories_colname = colnames(mobility_nyc)[10:15] #colnames(mobility_nyc)[c(10:13,17:20)]
 
 categories = c("Retail and Recreation",
                "Grocery and Pharmacy",
                "Parks",
                "Transit Stations",
-               "Workplaces",    
-               "Residential"
+               #"Workplaces",    
+               "Workplaces (Weekdays)",    
+               "Workplaces (Weekends)",    
+               #"Residential"
+               "Residential (Weekdays)",
+               "Residential (Weekends)"
                )
+
+categories1 = c("Retail and Recreation",
+               "Grocery and Pharmacy",
+               "Parks",
+               "Transit Stations",
+               "Workplaces",    
+               #"Workplaces (Weekdays)",    
+               #"Workplaces (Weekends)",    
+               "Residential"
+               #"Residential (Weekdays)",
+               #"Residential (Weekends)"
+)
+
 
 # covid_stats = c("case_count",
 #                 "hosp_count",
@@ -53,11 +70,12 @@ covid_stats = c("Cases",
 
 
 label1 = c()
-for (a in categories[1:6]) {
+for (a in categories1[1:length(categories1)]) {
   label1 = append(label1,
                   gsub("And", "&", paste(paste(str_to_title(strsplit(a, "_")[[1]]),collapse = " "),"Change (%)",sep=" ")))
   
 }
+
 ################
 ### Analysis ###
 ################
@@ -86,7 +104,8 @@ covid_comp_plot <- function(boro1,boro2,cstat){
     filter(borough %in% c(boro1,boro2)) %>%
     ggplot(na.rm=T) +
     geom_line(aes(x = date, y = (!!covid_stat), color = borough)) +
-    labs(title = cstat_title, x="Date", y=cstat_title_y,color="Borough")
+    labs(title = cstat_title, x="Date", y=cstat_title_y,color="Borough")+
+    scale_x_date(date_breaks = "2 months")
 }
 
 
@@ -107,7 +126,8 @@ boro_comp_plot <- function(boro1,boro2,cat){
     geom_line(aes(x = date, y = (!!cat), color = borough)) +
     labs(title = cat_title, x="Date", y="Mobility Change from Baseline (%)",color="Borough")+
     #scale_y_continuous(labels = percent)+
-    scale_y_continuous(labels = function(x) paste0(x, "%"))
+    scale_y_continuous(labels = function(x) paste0(x, "%"))+
+    scale_x_date(date_breaks = "2 months")
   
 }
 
