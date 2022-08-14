@@ -5,10 +5,10 @@ account: mxwwang
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 6713325
-bundleId: 6146395
+bundleId: 6199960
 url: https://mxwwang.shinyapps.io/nyc_app/
-when: 1659112916.51762
-lastSyncTime: 1659112916.51765
+when: 1660468455.9586
+lastSyncTime: 1660468455.95862
 asMultiple: FALSE
 asStatic: FALSE
 ignoredFiles: .RData|www/.DS_Store|www/image/.DS_Store
