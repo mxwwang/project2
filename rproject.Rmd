@@ -229,6 +229,24 @@ mobility_nyc = mobility_nyc %>%
 
 ```
 
+
+
+```{r}
+### split workplaces and residentials by weekdays
+
+mobility_nyc  <- mobility_nyc  %>%
+  mutate(workplaces_weekdays = case_when(weekday >=1 & weekday <=5   ~ workplaces),
+         
+         workplaces_weekends = case_when(weekday == 6 | weekday == 7  ~ workplaces),
+         
+         residential_weekdays = case_when(weekday >=1 & weekday <=5   ~ residential),
+         
+         residential_weekends = case_when(weekday == 6 | weekday == 7  ~ residential))
+
+
+```
+
+
 Replace county name by borough names
 ```{r}
 mobility_nyc <- mobility_nyc %>%
@@ -242,7 +260,7 @@ mobility_nyc <- mobility_nyc %>%
 ```
 
 
-Sava a copy
+Save a copy
 ```{r}
 ### save a copy of pre-processed mobility data
 #write.csv(mobility_nyc, "./data/mobility_nyc.csv",row.names=FALSE)
@@ -445,7 +463,7 @@ covid_nyc <- covid_nyc %>%
 colnames(covid_nyc)
 ```
 
-Sava a copy of pre-processed COVID data
+Save a copy of pre-processed COVID data
 ```{r}
 #write.csv(cases_nyc_v2, "./data/covid_nyc.csv",row.names=FALSE)
 #df_cases_nyc <- cases_nyc_v2
@@ -455,7 +473,7 @@ Sava a copy of pre-processed COVID data
 #df_vx_nyc <- vx_nyc_v2
 #vx_nyc_v2 <- df_vx_nyc
 
-#write.csv(covid_nyc, "./data/covid_nyc.csv",row.names=FALSE)
+write.csv(covid_nyc, "./data/covid_nyc.csv",row.names=FALSE)
 #df_covid_nyc <- covid_nyc
 #covid_nyc <- df_covid_nyc
 ```
@@ -467,8 +485,8 @@ Sava a copy of pre-processed COVID data
 
 #### 1. overall
 ```{r, fig.width = 20, fig.height = 5, warning=FALSE}
-categories_ = colnames(mobility_nyc)[10:15]
-
+#categories_ = colnames(mobility_nyc)[10:15]
+categories_ = colnames(mobility_nyc)[c(10:13,17:20)]
 
 mobility_nyc %>% 
   #group_by(borough) %>%
@@ -525,12 +543,37 @@ plots_by_category("Transit Stations")
 ```{r, fig.width = 10, fig.height = 5}
 plots_by_category("Workplaces")
 ```
+* 5.weekdays
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Workplaces Weekdays")
+```
+
+
+* 5.weekends
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Workplaces Weekends")
+```
+
 
 
 * 6
 ```{r, fig.width = 10, fig.height = 5}
 plots_by_category("Residential")
 ```
+
+
+* 6.weekdays
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Residential Weekdays")
+```
+
+* 6.weekends
+```{r, fig.width = 10, fig.height = 5}
+plots_by_category("Residential Weekends")
+```
+
+
+
 
 #### NOT IN USE - sidenote
 ```{r}
@@ -558,12 +601,12 @@ mobility_nyc %>%
 ```
 
 1. Manhattan is the most impacted borough across all categories.
-2. Retail & Recreation - shows clear recovery since 2021 but still under pre-covid level. Manhattan is heavily impacted and the other 4 boroughs are similier.
-3. Grocery and Pharmacy - leaset impacted category but still slightly under water
-4. Parks - Seasonality with peaks in summer and early fall time. Brookly and Queens have very high variations by seasonality, but mobility are still relatively lower than the baseline period in each year.
-5. Transit Stations - Still suffering large decreases from baseine across boroughs
-6. Workplaces - largest impacted category
-7. Residential - increase since COVID. Largest increase was in H1 2020, and show decreasing trends
+2. Retail & Recreation - shows clear recovery since 2021 but still under pre-covid level. Manhattan is heavily impacted and the other 4 boroughs are similar.
+3. Grocery and Pharmacy - least impacted category but still slightly under water.
+4. Parks - Seasonality with peaks in summer and early fall time. Brooklyn and Queens have very high variations by seasonality, but mobility is still relatively lower than the baseline period in each year.
+5. Transit Stations - Still suffering large decreases from baseline across boroughs.
+6. Workplaces - largest impacted category.
+7. Residential - increase since COVID. The largest increase was in H1 2020 and shows decreasing trends.
 
 
 ### Part II - Mobility Relationship with Covid (Manhattan)
@@ -608,14 +651,20 @@ ggplot(nyc_1) +
 
 ###### all category of a borough
 ```{r, fig.width = 10, fig.height = 20}
-categories_
+#categories_
+categories_colname = colnames(mobility_nyc)[10:15]#[c(10:13,17:20)]
+categories_colname
 
 label1 = c()
-for (a in categories_[1:6]) {
+for (a in categories_colname[1:length(categories_colname)]) {
   label1 = append(label1,
                gsub("And", "&", paste(paste(str_to_title(strsplit(a, "_")[[1]]),collapse = " "),"Change (%)",sep=" ")))
-
+  
 }
+
+label1 = gsub("Weekdays", "(Weekdays)", label1)
+label1 = gsub("Weekends", "(Weekends)", label1)
+
 label1
 
 ```
@@ -624,7 +673,8 @@ label1
 ```{r, fig.width = 10, fig.height = 15}
 source('func.R')
 
-categories_colname = colnames(mobility_nyc)[10:15]
+#categories_colname = colnames(mobility_nyc)[10:15]
+#categories_colname = colnames(mobility_nyc)[10:15]#[c(10:13,17:20)]
 
 boro_plot("Manhattan","Cases")
 boro_plot("Manhattan",covid_stat = "Vaccinations")
@@ -656,4 +706,44 @@ corr_matrix_plot(region="Manhattan", "2021-11-30")
 
 ```
 1. Residential mobility change is positively correlated with COVID stats, and all other categories are negatively correlated with them.
-2. Correlations between mobility change and COVID stats gradually decreases.
+2. Correlations between mobility change and COVID stats gradually decrease.
+
+### Additional graphs for presentation
+```{r}
+#{r, fig.width = 4, fig.height = 3}
+
+census_nyc %>% 
+  ggplot(aes(x=reorder(borough, -population), y=population, fill=borough)) +
+  geom_bar(stat='identity', width = 0.5) +
+  #geom_bar(position='dodge', stat='identity')
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.title.y=element_blank(),legend.position="none")+
+  guides( y = "none")+  
+  scale_y_continuous(labels = scales::comma) +
+  geom_text(aes(label = format(population, big.mark = ",")), 
+              position = position_stack(vjust = 1.05))+
+  geom_text(aes(label = scales::percent(percent/100, big.mark = ",")), 
+              position = position_stack(vjust = 0.5),
+            color="white")+
+  labs(title = "Population, New York City 2020", x="Borough",y="Population")+
+  guides(fill=guide_legend("Borough"))+
+  theme(plot.title = element_text(size = 18, face = "bold"))
+
+
+```
+
+```{r, fig.width = 10, fig.height = 6}
+nyc %>% 
+  group_by(date) %>% 
+  summarise(total = sum(case_count, na.rm = TRUE)) %>%
+  ggplot(aes(x=date, y=total)) +
+  geom_line(size=1,color="blue") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_date(date_breaks = "2 months")+
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "New York City Confirmed Cases", x="Date",y="Count")+
+  theme(plot.title = element_text(size = 18, face = "bold"))
+
+  
+```

@@ -15,8 +15,9 @@ cstat_to_colnames <- function(covid_stat) {
 
 ### function 1 - mobility across boroughs of 1 category
 plots_by_category <- function(category){
-  
+
   category = gsub(" ","_",tolower(category))
+  category = gsub("[()]", "", category)
   
   plt_dot = c("date","borough",category)
   plt_bar = c("date","borough",category)
@@ -24,7 +25,10 @@ plots_by_category <- function(category){
   title_dot = gsub("And", "&", paste(paste(str_to_title(strsplit(category, "_")[[1]]),collapse = " "),"Change from Baseline (%)",sep=" "))
   title_violin = gsub("And", "&", paste("Distribution of",paste(str_to_title(strsplit(category, "_")[[1]]),collapse = " "),"Change",sep=" "))
   title_bar = gsub("And", "&", paste("Median of", paste(str_to_title(strsplit(category, "_")[[1]]),collapse = " "),"Change",sep=" "))
-    
+  
+  title_dot = gsub("Weekdays", "(Weekdays)", title_dot)
+  title_dot = gsub("Weekends", "(Weekends)", title_dot)
+  
   # 1 - dot plot
   p1 = mobility_nyc %>%
     select(one_of(plt_dot)) %>%
@@ -32,9 +36,11 @@ plots_by_category <- function(category){
     group_by(borough) %>%
     ggplot() +
     geom_point(aes(x=date,y=feature,color=borough), size=1, alpha=0.4) +
+    scale_x_date(date_breaks = "2 months")+
     labs(title = title_dot, x="Date",y="Percentage Change (%)",color="Borough") +
     #ylim(-100,100) +
-    geom_hline(yintercept=0, linetype="dashed", color = "red",size = 1)
+    geom_hline(yintercept=0, linetype="dashed", color = "red",size = 1)+
+    theme(plot.title = element_text(face = "bold"))
   
   # 2 - violin
   p2<-  mobility_nyc %>%group_by(borough) %>%
@@ -43,7 +49,10 @@ plots_by_category <- function(category){
     ggplot(aes(x = borough, y = feature, fill = borough)) +
     geom_violin(trim = FALSE) +
     geom_boxplot(width = 0.07) + 
-    labs(title = title_violin, x="Borough", y="Percentage Change (%)",color="Borough")
+    labs(title = title_violin,  y="Percentage Change (%)",fill="Borough")+
+    theme(axis.title.x=element_blank(),
+          legend.position="none",
+          plot.title = element_text(face = "bold"))
 
   p3 <- mobility_nyc %>%
     select(one_of(plt_bar)) %>%
@@ -52,7 +61,9 @@ plots_by_category <- function(category){
     summarise(median = median(feature,na.rm=TRUE))%>%
     ggplot(aes(x=reorder(borough, median,), y=median,fill=borough)) +
     geom_bar(position='dodge', stat='identity')+
-    labs(title = title_bar, x="Borough",y="Percentage Change (%)")#,color="Borough")
+    labs(title = title_bar, x="Borough",y="Percentage Change (%)",fill="Borough")+
+    theme(axis.title.x=element_blank(),
+          plot.title = element_text(face = "bold"))
     #ylim(-80,100)
   
   
@@ -64,10 +75,16 @@ plots_by_category <- function(category){
   #   #labels = "A"       # Label of the line plot
   # )
 
+  # layout <- "
+  # AAA
+  # AAA
+  # BBC
+  # "
+  
   layout <- "
-  AAA
-  AAA
-  BBC
+  AAAAA
+  AAAAA
+  BBBCC
   "
   
   p1 + p2 + p3 + plot_layout(design = layout)
@@ -94,8 +111,9 @@ corr_matrix_plot <- function(region, cutoff_dt){
     df_nyc_0 = df_nyc %>%
       #filter(date<= cutoff_dt)%>%
       select(10,11,12,
-             13,14,15,
-             28,29,30,23,20)
+             13,#14,15,
+             17,18,19,20,
+             32,33,34,27)
     
     corrplot(cor(df_nyc_0,use="pairwise.complete.obs"), method="color", #col=col(200),
              type="lower", #order="hclust",
@@ -111,14 +129,16 @@ corr_matrix_plot <- function(region, cutoff_dt){
     df_nyc_1 = df_nyc %>%
       filter(date<= cutoff_dt)%>%
       select(10,11,12,
-             13,14,15,
-             28,29,30,23,20)
+             13,#14,15,
+             17,18,19,20,
+             32,33,34,27)
 
     df_nyc_2 = df_nyc %>%
       filter(date > cutoff_dt)%>%
       select(10,11,12,
-             13,14,15,
-             28,29,30,23,20)
+             13,#14,15,
+             17,18,19,20,
+             32,33,34,27)
 
     #dim(df_nyc_1)[1] + dim(df_nyc_2)[1] == dim(df_nyc)[1]
 
@@ -135,7 +155,8 @@ corr_matrix_plot <- function(region, cutoff_dt){
                   # hide correlation coefficient on the principal diagonal
                   title = paste("Correlation - Mobility & COVID Stats (Before ", cutoff_dt,")", sep=""),
                   mar=c(0, 0, 1, 0),
-                  diag=FALSE
+                  diag=FALSE,
+                  na.label = "NA"
     )
 
     #cor(df_nyc_2,use="pairwise.complete.obs")
@@ -148,7 +169,8 @@ corr_matrix_plot <- function(region, cutoff_dt){
                   # hide correlation coefficient on the principal diagonal
                   title = paste("Correlation - Mobility & COVID Stats (After ", cutoff_dt,")", sep=""),
                   mar=c(0, 0, 1, 0),
-                  diag=FALSE
+                  diag=FALSE,
+                  na.label = "NA"
     )
   }
 }
@@ -194,11 +216,17 @@ boro_plot <- function(region,covid_stat){
     ggplot(na.rm=T) +
     geom_line(aes(x=date, y=value,color=name),size=1,alpha=0.6)+
     geom_line(data = case,aes(x=date, y=covid_adj),size=1, alpha=0.6)+
+    scale_x_date(date_breaks = "2 months")+
     #ylim(-100,100)+
     facet_grid( name ~ .)+
     scale_y_continuous("Mobility change (%)", sec.axis = sec_axis(~.*coeff,name = "Case count")) +
-    labs(title = "Mobility change vs Case count", x="Date")+
-    guides(color=guide_legend("Category"))
+    labs(title = ptitle, x="Date")+
+    guides(color=guide_legend("Category"))+
+    theme(#axis.title.y=element_blank(),
+      legend.position="none",
+      plot.title = element_text(face = "bold")
+    )+
+    facet_wrap(vars(name), strip.position = "left", ncol = 1)
 }
 
 
